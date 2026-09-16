@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>버그를 잡아라! · MDS테크</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri/dist/galmuri.css" />
+<style>
+  :root{
+    --stage:#1E2D5C; --stage-2:#172246;              /* 네이비 배경 */
+    --cream:#C9C4B8; --cream-hi:#F0ECE1; --cream-sh:#8F8B80; /* 베이지 창 + 베벨 */
+    --ink:#EDE9DF; --muted:rgba(237,233,223,.62); --line:rgba(237,233,223,.16);
+    --ink-dark:#16203F;                                /* 크림 위 어두운 글자 */
+    --amber:#F5C518; --amber-ink:#2A2400;              /* 골드(긍정/점수) */
+    --coral:#E7141B;                                   /* 빨강(벌레/감점) */
+    --worm:#F5C518; --worm-ink:#2A2400;                /* 성공/젤리 = 골드 */
+    --edge:#0C1330;                                    /* 레트로 창 테두리 */
+    --radius:0px; --shadow:6px 6px 0 rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{margin:0;font-family:"Galmuri11","Pretendard","Apple SD Gothic Neo","Noto Sans KR",monospace,sans-serif;
+    color:var(--ink);
+    background:
+      repeating-linear-gradient(135deg, rgba(255,255,255,.015) 0 2px, transparent 2px 6px),
+      radial-gradient(120% 90% at 50% -10%, #26356A 0%, var(--stage) 45%, var(--stage-2) 100%);
+    overflow:hidden;-webkit-user-select:none;user-select:none;touch-action:manipulation;}
+  #app{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    padding:max(20px,env(safe-area-inset-top)) 20px max(20px,env(safe-area-inset-bottom));}
+
+  .screen{width:min(760px,100%);max-height:100%;display:none;flex-direction:column;
+    align-items:center;text-align:center;animation:pop .28s ease both;}
+  .screen.active{display:flex}
+  @keyframes pop{from{opacity:0;transform:translateY(10px) scale(.99)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.screen{animation:none}}
+
+  h1,h2{margin:0;font-weight:800;letter-spacing:-.02em;line-height:1.05}
+  .eyebrow{color:var(--cream);font-weight:800;font-size:15px;margin-bottom:14px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:.22em}
+  .lead{color:var(--muted);font-size:18px;line-height:1.55;margin:16px 0 0;max-width:36ch}
+
+  /* 레트로 창 프레임 */
+  .win{background:var(--cream);border:2px solid var(--edge);
+    box-shadow:inset 2px 2px 0 var(--cream-hi), inset -2px -2px 0 var(--cream-sh), var(--shadow);}
+  .titlebar{background:linear-gradient(90deg,#1E2D5C,#3A4A85);color:#fff;
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:6px 8px;font-weight:800;font-size:14px;letter-spacing:.02em;}
+  .titlebar .tbtns{display:flex;gap:4px}
+  .titlebar .tbtns b{width:19px;height:16px;display:grid;place-items:center;background:var(--cream);
+    border:1px solid var(--edge);box-shadow:inset 1px 1px 0 var(--cream-hi),inset -1px -1px 0 var(--cream-sh);
+    font-size:11px;color:var(--ink-dark);font-weight:700}
+
+  .btn{appearance:none;cursor:pointer;font-family:inherit;font-weight:800;font-size:20px;
+    padding:16px 34px;border-radius:0;background:var(--cream);color:var(--ink-dark);border:2px solid var(--edge);
+    box-shadow:inset 2px 2px 0 var(--cream-hi), inset -2px -2px 0 var(--cream-sh);
+    transition:transform .06s ease;}
+  .btn:active{transform:translate(1px,1px);box-shadow:inset -2px -2px 0 var(--cream-hi), inset 2px 2px 0 var(--cream-sh)}
+  .btn:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.4)}
+  .btn.primary{background:var(--coral);color:#fff;border-color:var(--edge);
+    box-shadow:inset 2px 2px 0 #ff5a5f, inset -2px -2px 0 var(--red-dark,#9E0C11)}
+  .btn.ghost{background:transparent;color:var(--ink);box-shadow:none;border:1.5px solid var(--line);font-size:17px;padding:14px 24px}
+
+  .brand{font-size:14px;font-weight:700;color:var(--muted);letter-spacing:.06em}
+  .hero-title{font-size:clamp(40px,9.5vw,84px);color:#F6F2E8;margin:18px 0 0;
+    text-shadow:3px 3px 0 rgba(0,0,0,.35);}
+  .introArt{width:min(320px,72vw);height:auto;margin:6px auto 0;display:block}
+  .intro-card{margin-top:26px;background:rgba(255,255,255,.05);border:1px solid var(--line);
+    border-radius:0;padding:20px 24px;display:flex;gap:26px;justify-content:center;flex-wrap:wrap;}
+  .fact{display:flex;flex-direction:column;gap:2px}
+  .fact b{font-size:26px;color:var(--amber)}
+  .fact span{font-size:13px;color:var(--muted)}
+  .testbadge{margin-top:16px;font-size:12.5px;color:var(--muted);border:1px dashed var(--line);border-radius:0;padding:6px 14px}
+  /* 인트로 에러 다이얼로그 */
+  .errbox{width:min(440px,92%);margin:4px auto 0;text-align:left}
+  .errbody{display:flex;gap:16px;align-items:center;padding:22px 20px}
+  .errbody .warn{flex:0 0 auto}
+  .errtext{color:var(--ink-dark);font-size:16px;line-height:1.5;font-weight:600}
+  .errfoot{display:flex;justify-content:center;padding:0 20px 18px}
+  .errfoot .btn{min-width:120px;padding:12px 28px;font-size:18px}
+
+  #leadForm{width:100%;text-align:left;margin-top:24px;display:grid;gap:16px}
+  .field{display:grid;gap:8px}
+  label{font-size:15px;font-weight:600;color:var(--ink)}
+  label .req{color:var(--coral);margin-left:4px}
+  input[type=text],input[type=email]{width:100%;font-family:inherit;font-size:19px;color:var(--ink-dark);
+    background:var(--cream);border:2px solid var(--edge);border-radius:0;padding:16px;outline:none;transition:box-shadow .12s;
+    box-shadow:inset 2px 2px 0 var(--cream-sh);}
+  input::placeholder{color:rgba(22,32,63,.4)} input:focus{box-shadow:inset 0 0 0 2px var(--coral)}
+  .chips{display:flex;flex-wrap:wrap;gap:10px}
+  .chip{font-size:16px;font-weight:700;color:var(--ink);background:rgba(255,255,255,.06);
+    border:2px solid var(--line);border-radius:0;padding:12px 16px;cursor:pointer;transition:.1s;}
+  .chip[aria-pressed="true"]{background:var(--coral);color:#fff;border-color:var(--edge)}
+  .check{display:flex;gap:12px;align-items:flex-start;cursor:pointer;font-size:15px;color:var(--muted);line-height:1.5}
+  .check input{width:24px;height:24px;flex:0 0 auto;margin-top:1px;accent-color:var(--amber)}
+  .check b{color:var(--ink);font-weight:600}
+  .privacy-note{font-size:12.5px;color:rgba(243,239,227,.42);line-height:1.5;margin-top:-4px}
+  .form-actions{display:flex;gap:12px;margin-top:6px} .form-actions .btn{flex:1}
+
+  #count{font-size:clamp(120px,32vw,240px);font-weight:800;color:var(--amber);line-height:1}
+  .count-go{color:var(--worm)!important}
+
+  #game{width:min(820px,100%)}
+  .hud{display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:14px;gap:14px;}
+  .hud .cell{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:0;padding:12px 14px;text-align:center;}
+  .hud .cell .k{font-size:12px;color:var(--muted);font-weight:600}
+  .hud .cell .v{font-size:30px;font-weight:800;margin-top:2px;display:inline-block}
+  .cell.time .v{color:var(--ink)} .cell.time.low .v{color:var(--coral)}
+  .cell.score .v{color:var(--worm)}
+  .cell.score .v.bump{animation:bump .3s ease}
+  @keyframes bump{0%{transform:scale(1)}40%{transform:scale(1.4)}100%{transform:scale(1)}}
+  .timebar{height:8px;border-radius:0;background:rgba(255,255,255,.08);overflow:hidden;margin-bottom:14px}
+  .timebar>i{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--amber),#FFD673);transition:width .25s linear}
+
+  .arena-win{width:100%;box-shadow:inset 2px 2px 0 var(--cream-hi), inset -2px -2px 0 var(--cream-sh), var(--shadow);
+    background:var(--cream);border:2px solid var(--edge);padding:0;}
+  .arena-win .titlebar{padding:6px 8px}
+  .arena{position:relative;width:100%;height:min(56vh,540px);overflow:hidden;
+    background:
+      radial-gradient(1px 1px at 20% 22%, rgba(255,255,255,.9), transparent 60%),
+      radial-gradient(1px 1px at 62% 15%, rgba(255,255,255,.8), transparent 60%),
+      radial-gradient(1.5px 1.5px at 82% 34%, rgba(255,255,255,.9), transparent 60%),
+      radial-gradient(1px 1px at 38% 40%, rgba(255,255,255,.7), transparent 60%),
+      radial-gradient(1.5px 1.5px at 12% 60%, rgba(255,255,255,.8), transparent 60%),
+      radial-gradient(1px 1px at 72% 66%, rgba(255,255,255,.7), transparent 60%),
+      linear-gradient(180deg,#0F1730 0%, #172246 55%, #1E2D5C 100%);
+    box-shadow:inset 0 0 0 2px var(--edge);border-top:0;}
+  .arena .ground{position:absolute;left:0;right:0;bottom:0;height:11%;
+    background:linear-gradient(180deg,#3A4A85,#2A3866);pointer-events:none;
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.18);}
+  .arena .ground::before{content:"";position:absolute;left:50%;top:52%;transform:translateX(-50%);
+    width:70%;height:4px;background:repeating-linear-gradient(90deg,var(--cream) 0 22px,transparent 22px 44px);opacity:.5;}
+  .plane{position:absolute;top:0;left:0;pointer-events:none;z-index:3;will-change:transform;
+    filter:drop-shadow(3px 4px 0 rgba(0,0,0,.35));}
+  .plane svg{display:block;width:120px;height:auto;image-rendering:pixelated;shape-rendering:crispEdges}
+  .bug{position:absolute;top:0;left:0;cursor:pointer;will-change:transform;touch-action:none;z-index:4;
+    filter:drop-shadow(2px 3px 0 rgba(0,0,0,.4));}
+  .bug svg{width:100%;height:100%;display:block;image-rendering:pixelated;shape-rendering:crispEdges}
+  .bug.grab{opacity:0}
+  .code{position:absolute;top:0;left:0;cursor:pointer;touch-action:none;z-index:4;
+    display:flex;align-items:center;justify-content:center;height:38px;padding:0 12px;white-space:nowrap;
+    font-family:"Galmuri11",ui-monospace,monospace;font-weight:700;font-size:17px;
+    color:var(--ink-dark);border-radius:0;border:2px solid var(--edge);background:var(--cream);
+    box-shadow:inset 2px 2px 0 var(--cream-hi), inset -2px -2px 0 var(--cream-sh);}
+  .code.wrong{transition:transform .2s ease, opacity .2s, filter .2s;opacity:0;filter:brightness(1.3)}
+
+  .streak{position:absolute;width:8px;transform:translateX(-50%);z-index:5;image-rendering:pixelated;
+    background:linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.9));
+    animation:streak .22s ease-out forwards}
+  @keyframes streak{from{opacity:.95}to{opacity:0;transform:translateX(-50%) translateY(-40px)}}
+
+  .pop{position:absolute;pointer-events:none;z-index:6;width:0;height:0}
+  .pop .ring{position:absolute;width:56px;height:56px;margin:-28px;border-radius:0;
+    border:4px solid var(--ringc,var(--worm));animation:ring .5s steps(4) forwards;image-rendering:pixelated}
+  @keyframes ring{from{transform:scale(.3);opacity:1}to{transform:scale(1.7);opacity:0}}
+  .pop .plus{position:absolute;transform:translate(-50%,-50%);color:var(--ringc,var(--worm));
+    font-family:"Galmuri11",monospace;font-weight:700;font-size:24px;
+    text-shadow:2px 2px 0 rgba(0,0,0,.4);animation:plus .7s steps(6) forwards;white-space:nowrap}
+  @keyframes plus{0%{transform:translate(-50%,-50%) scale(.6);opacity:0}20%{opacity:1}100%{transform:translate(-50%,-180%) scale(1);opacity:0}}
+  .pop .dot{position:absolute;width:8px;height:8px;margin:-4px;border-radius:0;animation:dot .5s steps(5) forwards}
+  @keyframes dot{from{transform:translate(0,0);opacity:1}to{transform:translate(var(--dx),var(--dy));opacity:0}}
+  .puff{position:absolute;pointer-events:none;z-index:2;width:40px;height:40px;margin:-20px;border-radius:0;
+    background:radial-gradient(circle,rgba(255,255,255,.5),transparent 70%);animation:puff .5s steps(4) forwards}
+  @keyframes puff{from{transform:scale(.4);opacity:.7}to{transform:scale(1.5);opacity:0}}
+  .cell.score.shake{animation:shake .3s steps(2)}
+  @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+  .gcaption{margin-top:12px;font-size:13px;color:var(--muted);text-align:center}
+  .gcaption b{color:var(--coral)} .gcaption i{color:var(--cream);font-style:normal;font-family:"Galmuri11",monospace}
+
+  .result-emoji{font-size:clamp(70px,18vw,120px);line-height:1;margin-bottom:6px}
+  .prize{margin-top:24px;background:var(--cream);color:var(--ink-dark);
+    border:2px solid var(--edge);border-radius:0;padding:24px 26px;max-width:40ch;
+    box-shadow:inset 2px 2px 0 var(--cream-hi), inset -2px -2px 0 var(--cream-sh), var(--shadow);}
+  .prize .worm{font-size:44px}
+  .prize h2{color:var(--coral);margin-top:8px}
+  .prize .jnum{font-size:clamp(52px,14vw,84px);font-weight:800;color:var(--coral);line-height:1;margin:4px 0}
+  .prize p{color:var(--ink-dark);font-size:16px;line-height:1.55;margin:8px 0 0}
+  .prize .staff{margin-top:14px;font-size:14px;color:#4B5373;border-top:1px solid rgba(22,32,63,.2);padding-top:12px}
+  .win-title{color:#F6F2E8}
+
+  #adminDot{position:fixed;left:0;bottom:0;width:64px;height:64px;z-index:40;opacity:0}
+  #adminPanel{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;
+    padding:24px;background:rgba(5,18,19,.86);backdrop-filter:blur(6px);}
+  #adminPanel.active{display:flex}
+  .admin-card{width:min(420px,100%);background:var(--stage-2);border:1px solid var(--line);
+    border-radius:var(--radius);padding:26px;box-shadow:var(--shadow);text-align:left;}
+  .admin-card h3{margin:0 0 4px;font-size:20px}
+  .admin-card .count{font-size:44px;font-weight:800;color:var(--amber);margin:10px 0 2px}
+  .admin-card .count small{font-size:15px;color:var(--muted);font-weight:600;margin-left:6px}
+  .admin-card .row{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+  .admin-card .row .btn{flex:1;font-size:16px;padding:15px 18px}
+  .btn.danger{background:transparent;border:1.5px solid var(--coral);color:var(--coral);box-shadow:none}
+  .btn.small{background:transparent;border:1.5px solid var(--line);color:var(--muted);box-shadow:none}
+  .admin-hint{font-size:12.5px;color:rgba(243,239,227,.4);margin-top:16px;line-height:1.5}
+
+  .linklike{appearance:none;border:0;background:none;padding:0;margin:0;cursor:pointer;
+    font:inherit;color:var(--amber);text-decoration:underline;text-underline-offset:2px}
+  .linkhint{color:var(--muted);font-weight:400;font-size:13px}
+  #privacyPanel{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;
+    padding:24px;background:rgba(5,10,25,.86);backdrop-filter:blur(6px);}
+  #privacyPanel.active{display:flex}
+  .privacy-card{width:min(460px,100%);max-height:82vh;overflow:auto;background:var(--cream);color:var(--ink-dark);
+    border:2px solid var(--edge);box-shadow:inset 2px 2px 0 var(--cream-hi), inset -2px -2px 0 var(--cream-sh), var(--shadow);text-align:left;}
+  .privacy-card .titlebar{padding:8px 10px}
+  .privacy-card .pbody{padding:20px 22px}
+  .privacy-card h3{margin:0 0 12px;font-size:18px;color:var(--ink-dark)}
+  .privacy-card dl{margin:0;display:grid;gap:12px}
+  .privacy-card dt{font-weight:800;font-size:14px;color:#2A3866}
+  .privacy-card dd{margin:2px 0 0;font-size:14px;line-height:1.55;color:var(--ink-dark)}
+  .privacy-card .note{margin-top:16px;font-size:12.5px;color:#4B5373;line-height:1.5;border-top:1px solid rgba(22,32,63,.18);padding-top:12px}
+  .privacy-card .pfoot{padding:0 22px 20px;display:flex;justify-content:flex-end}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- 1. 인트로 (레트로 에러창) -->
+  <section class="screen active" id="intro">
+    <div class="eyebrow">CATCH THE BUG!</div>
+    <div class="win errbox">
+      <div class="titlebar">⚠ Bug Detected<span class="tbtns"><b>_</b><b>▢</b><b>✕</b></span></div>
+      <div class="winbody errbody">
+        <svg class="warn" width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+          <path d="M26 3 L50 46 L2 46 Z" fill="#F5C518" stroke="#16203F" stroke-width="2.5" stroke-linejoin="round"/>
+          <rect x="23.4" y="18" width="5.2" height="15" rx="2.6" fill="#16203F"/>
+          <circle cx="26" cy="39" r="3" fill="#16203F"/>
+        </svg>
+        <div class="errtext">항공 위에서 버그가 감지되었습니다.<br>낙하하는 버그를 낚아채세요.</div>
+      </div>
+      <div class="errfoot"><button type="button" class="btn primary" id="introStart">YES</button></div>
+    </div>
+    <div class="gcaption" style="margin-top:20px"><b>🐞 빨간 벌레</b>만 잡고, <i>&lt;/&gt; { } ♪</i> 코드는 건드리지 마세요!</div>
+    <div class="testbadge" id="testBadge">테스트 모드 · 설문 없이 바로 시작</div>
+  </section>
+
+  <!-- 2. 리드 폼 (실제 행사용) -->
+  <section class="screen" id="formScreen">
+    <div class="eyebrow">참가 정보 입력</div>
+    <h2>정보만 남기면 바로 시작!</h2>
+    <div id="leadForm">
+      <div class="field"><label for="fName">이름<span class="req">*</span></label>
+        <input id="fName" type="text" autocomplete="name" placeholder="홍길동" /></div>
+      <div class="field"><label for="fCompany">회사명<span class="req">*</span></label>
+        <input id="fCompany" type="text" autocomplete="organization" placeholder="회사명을 입력하세요" /></div>
+      <div class="field"><label for="fDept">부서/팀<span class="req">*</span></label>
+        <input id="fDept" type="text" autocomplete="organization-title" placeholder="예) 개발팀, SW연구소" /></div>
+      <div class="field"><label for="fEmail">이메일<span class="req">*</span></label>
+        <input id="fEmail" type="email" autocomplete="email" inputmode="email" placeholder="name@company.com" /></div>
+      <div class="field"><label for="fPhone">핸드폰번호<span class="req">*</span></label>
+        <input id="fPhone" type="text" autocomplete="tel" inputmode="tel" placeholder="010-1234-5678" /></div>
+      <div class="field"><label>관심 제품<span class="req">*</span> <span class="linkhint">(중복 선택 가능)</span></label>
+        <div class="chips" id="products">
+          <button type="button" class="chip" data-v="TRACE32">TRACE32</button>
+          <button type="button" class="chip" data-v="DT+">DT+</button>
+          <button type="button" class="chip" data-v="GHS">GHS</button>
+        </div></div>
+      <label class="check"><input type="checkbox" id="fSub" />
+        <span><b>DBug LETTER 뉴스레터 구독</b> — 임베디드·기능안전 소식을 메일로 받아볼게요 (선택)</span></label>
+      <label class="check"><input type="checkbox" id="fConsent" />
+        <span><b><button type="button" class="linklike" id="openPrivacy">개인정보 수집·이용 동의<span class="req">*</span></button></b> — 아래 내용에 동의합니다. <span class="linkhint">(문구를 누르면 상세 내용)</span></span></label>
+      <div class="form-actions">
+        <button type="button" class="btn ghost" id="formBack">뒤로</button>
+        <button type="button" class="btn" id="startGame" disabled>게임 시작</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. 카운트다운 -->
+  <section class="screen" id="countdown">
+    <div class="eyebrow">준비하세요</div>
+    <div id="count">3</div>
+  </section>
+
+  <!-- 4. 게임 -->
+  <section class="screen" id="game">
+    <div class="hud">
+      <div class="cell time" id="timeCell"><div class="k">남은 시간</div><div class="v" id="timeVal">30</div></div>
+      <div class="cell score"><div class="k">잡은 버그 (= 젤리)</div><div class="v" id="scoreVal">0</div></div>
+    </div>
+    <div class="timebar"><i id="timeBar"></i></div>
+    <div class="arena-win win">
+      <div class="titlebar">🐞 CATCH_THE_BUG.EXE<span class="tbtns"><b>_</b><b>▢</b><b>✕</b></span></div>
+      <div class="arena" id="arena"></div>
+    </div>
+    <div class="gcaption"><b>🐞 빨간 벌레</b>는 잡고, <i>&lt;/&gt; { } ♪</i> 코드는 건드리지 마세요!</div>
+  </section>
+
+  <!-- 5. 결과 -->
+  <section class="screen" id="result">
+    <div class="result-emoji" id="resEmoji">🎉</div>
+    <h1 class="win-title" id="resTitle">명중!</h1>
+    <p class="lead" id="resSub"></p>
+    <div class="prize" id="prizeBox">
+      <div class="worm">🪱🍬</div>
+      <div class="jnum" id="jellyNum">0</div>
+      <h2>지렁이 젤리 획득!</h2>
+      <p id="prizeMsg">이 화면을 부스 담당자에게 보여주고 젤리를 받아가세요.</p>
+    </div>
+    <div style="margin-top:24px"><button class="btn" id="resAgain">다시 하기</button></div>
+  </section>
+
+</div>
+
+<div id="adminDot" title="관리자"></div>
+<div id="adminPanel">
+  <div class="admin-card">
+    <h3>참가자 리드 관리</h3>
+    <div class="count"><span id="adminCount">0</span><small>명 수집됨</small></div>
+    <div class="row"><button class="btn" id="exportCsv">CSV 내보내기</button></div>
+    <div class="row">
+      <button class="btn small" id="closeAdmin">닫기</button>
+      <button class="btn danger" id="resetData">데이터 초기화</button>
+    </div>
+    <p class="admin-hint">좌측 하단 모서리를 1.5초간 길게 누르면 이 창이 열립니다. CSV는 이 기기에서 엑셀로 바로 열 수 있습니다(한글 인코딩 포함).</p>
+  </div>
+</div>
+
+<!-- 개인정보 수집·이용 동의 상세 -->
+<div id="privacyPanel">
+  <div class="privacy-card win">
+    <div class="titlebar">개인정보 수집·이용 동의<span class="tbtns"><b>✕</b></span></div>
+    <div class="pbody">
+      <h3>수집하는 개인정보 안내</h3>
+      <dl>
+        <div><dt>① 수집 항목</dt><dd>이름, 회사명, 부서/팀, 이메일, 휴대폰번호, 관심 제품</dd></div>
+        <div><dt>② 수집·이용 목적</dt><dd>전시회 이벤트 경품(지렁이 젤리) 제공 및 참가 확인, 제품·행사 관련 정보 안내 및 마케팅 활용</dd></div>
+        <div><dt>③ 보유·이용 기간</dt><dd>수집일로부터 1년 또는 동의 철회 시까지 (목적 달성·기간 경과 시 지체 없이 파기)</dd></div>
+        <div><dt>④ 동의 거부 권리</dt><dd>동의를 거부하실 수 있으며, 이 경우 이벤트 경품 제공이 제한될 수 있습니다.</dd></div>
+      </dl>
+      <p class="note">수집·이용 주체: MDS테크 · 수집된 정보는 회사 개인정보 처리방침에 따라 관리되며, 목적 외로 이용하거나 제3자에게 제공하지 않습니다.</p>
+    </div>
+    <div class="pfoot"><button type="button" class="btn" id="closePrivacy">확인</button></div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   설정 — 난이도/브랜딩을 여기서 조정하세요
+   ========================================================= */
+const CONFIG = {
+  TEST_MODE: false,       // 설문 켜짐: YES → 참가 정보 입력 → 게임
+  GAME_SECONDS: 30,
+  MAX_BUGS_TOTAL: 10,     // 잡을 수 있는 버그 총량 = 최대 젤리 수 (코드 디코이는 별도)
+  SPAWN_MS: 620,          // 등장 간격(ms). 짧을수록 와르르 쏟아짐
+  SPAWN_JITTER: 380,
+  MAX_SIMULTANEOUS: 5,    // 동시에 떨어지는 최대 개수(버그+코드). 클수록 정신없음
+  BUG_RATIO: 0.45,        // 떨어지는 것 중 버그 비율(나머지는 코드 디코이)
+  CODE_PENALTY: 1,        // 코드를 잘못 잡으면 깎이는 젤리 수
+  BUG_SIZE: 60,
+  GRAVITY: 320,           // 낙하 가속도. 클수록 빨라 어려움
+  FALL_SPEED_MAX: 380,
+  FALL_SPEED_INIT: 50,
+  DRIFT_AMP_MIN: 26,
+  DRIFT_AMP_MAX: 76,      // 좌우 흔들림. 클수록 낚아채기 어려움
+  WOBBLE_FREQ_MIN: 1.8,
+  WOBBLE_FREQ_MAX: 3.6,
+  PLANE_SPEED: 150,
+  BUG_COLORS: ['#E7141B'],   // 벌레는 무조건 빨강(무당벌레)
+  CODE_TOKENS: ['&lt;/&gt;','{ }','0xFF','== ','NULL',';','#','[ ]','( )','♪','♫','&amp;&amp;'],
+  SHEET_ENDPOINT: 'https://script.google.com/macros/s/AKfycbzjxr5QH5725VoJ0P-W26pwbGW9Mtt5bFZuIsW_OfMUy6zePM4amKQpwwaWLMR_4Rb9/exec',
+  STORAGE_KEY: 'mds_bughunt_leads_v1'
+};
+
+/* ---------- 픽셀 스프라이트 생성기 ---------- */
+function pixelSVG(map, pal){
+  const H=map.length, W=map[0].length; let r='';
+  for(let y=0;y<H;y++){ const row=map[y];
+    for(let x=0;x<W;x++){ const ch=row[x]; if(ch==='.'||ch===' ') continue;
+      const c=pal[ch]; if(!c) continue;
+      r+='<rect x="'+x+'" y="'+y+'" width="1.03" height="1.03" fill="'+c+'"/>';
+    }
+  }
+  return '<svg viewBox="0 0 '+W+' '+H+'" shape-rendering="crispEdges" preserveAspectRatio="xMidYMid meet">'+r+'</svg>';
+}
+
+// 빨간 무당벌레 (15x15) — K:검정 R:빨강 W:눈
+const BUG_MAP = [
+  "......K.K......",
+  ".....K...K.....",
+  ".....KKKKK.....",
+  "....KKKKKKK....",
+  "....KWKKKWK....",
+  "...RRRRKRRRR...",
+  "..RRRRRKRRRRR..",
+  "..RRKRRKRRKRR..",
+  ".KRRRRRKRRRRRK.",
+  "..RRRRRKRRRRR..",
+  "..RRKRRKRRKRR..",
+  ".KRRRRRKRRRRRK.",
+  "..RRRRRKRRRRR..",
+  "...RRRRKRRRR...",
+  "....RRR.RRR...."
+];
+const BUG_SPRITE = pixelSVG(BUG_MAP, {K:'#1B1B1B', R:'#E7141B', W:'#FFFFFF'});
+
+// 픽셀 여객기 (22x11, 오른쪽으로 비행) — K:테두리 C:크림 A:빨강꼬리 W:창문 E:엔진
+const PLANE_MAP = [
+  "...KK.................",
+  "...KAK................",
+  "..KKAKK...............",
+  ".KKKKKKKKKKKKKKKK.....",
+  ".KCCCCCCCCCCCCCCCKKK..",
+  "KCWCWCWCWCCCCCCCCCCAK.",
+  "KCCCCCCCCCCCCCCCCCCAK.",
+  ".KKCCCCCCCCCCCCCKKKK..",
+  "...KK.KKEEEEKK.KK.....",
+  ".......KEEEEK.........",
+  ".......KKKKKK........."
+];
+const PLANE_SPRITE = pixelSVG(PLANE_MAP, {K:'#16203F', C:'#EDE7D8', A:'#E7141B', W:'#3A4A85', E:'#B9B3A6'});
+
+const screens = {};
+document.querySelectorAll('.screen').forEach(s => screens[s.id] = s);
+function show(id){ Object.values(screens).forEach(s=>s.classList.remove('active')); screens[id].classList.add('active'); }
+
+const _ft=document.getElementById('factTime'); if(_ft) _ft.textContent = CONFIG.GAME_SECONDS + '초';
+const _fm=document.getElementById('factMax'); if(_fm) _fm.textContent = CONFIG.MAX_BUGS_TOTAL + '마리';
+if(!CONFIG.TEST_MODE) document.getElementById('testBadge').style.display = 'none';
+
+/* ---------- 리드 데이터 ---------- */
+let leads = [];
+try { const raw = localStorage.getItem(CONFIG.STORAGE_KEY); if(raw) leads = JSON.parse(raw)||[]; } catch(e){ leads=[]; }
+function persist(){ try{ localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(leads)); }catch(e){} }
+function sendToSheet(lead){
+  if(!CONFIG.SHEET_ENDPOINT) return;   // URL 미설정 시 조용히 통과(로컬 저장은 그대로)
+  try{
+    fetch(CONFIG.SHEET_ENDPOINT, {
+      method:'POST', mode:'no-cors',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify(lead)
+    }).catch(()=>{});
+  }catch(e){}
+}
+let currentLead = null;
+
+/* ---------- 인트로 → (테스트: 게임 / 실제: 폼) ---------- */
+document.getElementById('introStart').addEventListener('click', () => {
+  if(CONFIG.TEST_MODE){ currentLead=null; startCountdown(); }
+  else { resetForm(); show('formScreen'); }
+});
+document.getElementById('formBack').addEventListener('click', () => show('intro'));
+
+/* ---------- 폼 ---------- */
+const products=new Set();
+const productWrap=document.getElementById('products');
+productWrap.addEventListener('click', e=>{
+  const chip=e.target.closest('.chip'); if(!chip) return;
+  const v=chip.dataset.v;
+  if(products.has(v)){ products.delete(v); chip.setAttribute('aria-pressed','false'); }
+  else { products.add(v); chip.setAttribute('aria-pressed','true'); }
+  validate();
+});
+const fName=document.getElementById('fName'),fCompany=document.getElementById('fCompany'),
+      fDept=document.getElementById('fDept'),fEmail=document.getElementById('fEmail'),
+      fPhone=document.getElementById('fPhone'),fSub=document.getElementById('fSub'),
+      fConsent=document.getElementById('fConsent'),startBtn=document.getElementById('startGame');
+function emailOk(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()); }
+function phoneOk(v){ return (v.replace(/[^0-9]/g,'').length)>=10; }
+function validate(){ const ok=fName.value.trim()&&fCompany.value.trim()&&fDept.value.trim()
+  &&emailOk(fEmail.value)&&phoneOk(fPhone.value)&&products.size>0&&fConsent.checked; startBtn.disabled=!ok; return ok; }
+[fName,fCompany,fDept,fEmail,fPhone].forEach(el=>el.addEventListener('input',validate));
+fConsent.addEventListener('change',validate);
+function resetForm(){ fName.value='';fCompany.value='';fDept.value='';fEmail.value='';fPhone.value='';
+  fSub.checked=false;fConsent.checked=false;
+  products.clear();productWrap.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed','false'));startBtn.disabled=true; }
+startBtn.addEventListener('click', ()=>{
+  if(!validate()) return;
+  currentLead={ ts:new Date().toISOString(), name:fName.value.trim(), company:fCompany.value.trim(),
+    dept:fDept.value.trim(), email:fEmail.value.trim(), phone:fPhone.value.trim(),
+    product:[...products].join(', '), subscribe:fSub.checked?'Y':'N', caught:'' };
+  leads.push(currentLead); persist(); sendToSheet(currentLead); startCountdown();
+});
+
+/* ---------- 개인정보 동의 상세 팝업 ---------- */
+const privacyPanel=document.getElementById('privacyPanel');
+document.getElementById('openPrivacy').addEventListener('click', ()=>privacyPanel.classList.add('active'));
+document.getElementById('closePrivacy').addEventListener('click', ()=>privacyPanel.classList.remove('active'));
+privacyPanel.addEventListener('click', e=>{ if(e.target===privacyPanel) privacyPanel.classList.remove('active'); });
+
+/* ---------- 카운트다운 ---------- */
+function startCountdown(){
+  show('countdown'); const el=document.getElementById('count'); let n=3;
+  el.classList.remove('count-go'); el.textContent=n;
+  const tick=setInterval(()=>{ n--;
+    if(n===0){ el.textContent='GO!'; el.classList.add('count-go'); }
+    else if(n<0){ clearInterval(tick); startGame(); }
+    else el.textContent=n; },750);
+}
+
+/* =========================================================
+   게임 — 항공기가 떨어뜨리는 버그 낚아채기
+   ========================================================= */
+const arena=document.getElementById('arena');
+const timeVal=document.getElementById('timeVal'), scoreVal=document.getElementById('scoreVal');
+const timeBar=document.getElementById('timeBar'), timeCell=document.getElementById('timeCell');
+
+let items=[], plane=null;
+let score=0,timeLeft=0,running=false,bugsSpawned=0,bugInterval=2500;
+let gameTimer=null,bugTimer=null,codeTimer=null,rafId=null,lastTs=0;
+function rand(a,b){ return a+Math.random()*(b-a); }
+
+function buildScene(){
+  arena.innerHTML='';
+  const ground=document.createElement('div'); ground.className='ground'; arena.appendChild(ground);
+  const H=arena.clientHeight;
+  const p=document.createElement('div'); p.className='plane'; p.innerHTML=PLANE_SPRITE; arena.appendChild(p);
+  plane={ el:p, x:-70, baseY:Math.max(20,H*0.09), y:0, speed:CONFIG.PLANE_SPEED };
+}
+
+function startGame(){
+  buildScene(); items=[];
+  score=0; timeLeft=CONFIG.GAME_SECONDS; running=true; bugsSpawned=0;
+  bugInterval=(CONFIG.GAME_SECONDS*1000)/(CONFIG.MAX_BUGS_TOTAL+1); // 버그 10마리를 30초에 고르게
+  scoreVal.textContent='0'; timeVal.textContent=timeLeft;
+  timeBar.style.width='100%'; timeCell.classList.remove('low');
+  show('game');
+  gameTimer=setInterval(()=>{ timeLeft--;
+    timeVal.textContent=Math.max(timeLeft,0);
+    timeBar.style.width=(timeLeft/CONFIG.GAME_SECONDS*100)+'%';
+    if(timeLeft<=5) timeCell.classList.add('low');
+    if(timeLeft<=0) endGame();
+  },1000);
+  scheduleBug(); scheduleCode();
+  lastTs=performance.now(); rafId=requestAnimationFrame(loop);
+}
+
+function scheduleBug(){
+  if(!running || bugsSpawned>=CONFIG.MAX_BUGS_TOTAL) return;
+  bugTimer=setTimeout(()=>{ if(running){ spawnItem('bug'); bugsSpawned++; } scheduleBug(); },
+    bugInterval*rand(0.7,1.3));
+}
+function scheduleCode(){
+  if(!running) return;
+  codeTimer=setTimeout(()=>{
+    if(running && items.filter(it=>it.kind==='code').length<CONFIG.MAX_SIMULTANEOUS) spawnItem('code');
+    scheduleCode();
+  }, CONFIG.SPAWN_MS + Math.random()*CONFIG.SPAWN_JITTER);
+}
+
+function spawnItem(kind){
+  const W=arena.clientWidth;
+  const dropX = plane ? Math.max(28,Math.min(W-28, plane.x + rand(-24,24))) : rand(28,W-28);
+  const dropY = plane ? plane.y+24 : 24;
+  const el=document.createElement('div');
+  let hw, hh;
+  if(kind==='bug'){
+    el.className='bug';
+    el.style.width=CONFIG.BUG_SIZE+'px'; el.style.height=CONFIG.BUG_SIZE+'px';
+    el.innerHTML=BUG_SPRITE;
+    hw=hh=CONFIG.BUG_SIZE/2;
+  } else {
+    el.className='code';
+    el.innerHTML=CONFIG.CODE_TOKENS[Math.floor(Math.random()*CONFIG.CODE_TOKENS.length)];
+  }
+  arena.appendChild(el);
+  if(kind==='code'){ hw=el.offsetWidth/2; hh=el.offsetHeight/2; }
+  const item={ el, kind, baseX:dropX, x:dropX, y:dropY, hw, hh, vy:CONFIG.FALL_SPEED_INIT,
+    driftAmp:rand(CONFIG.DRIFT_AMP_MIN,CONFIG.DRIFT_AMP_MAX),
+    freq:rand(CONFIG.WOBBLE_FREQ_MIN,CONFIG.WOBBLE_FREQ_MAX), phase:rand(0,Math.PI*2),
+    spin:rand(30,70)*(Math.random()<0.5?-1:1), tilt:rand(-10,10),
+    born:performance.now(), alive:true };
+  el.addEventListener('pointerdown', ev=>{ ev.preventDefault(); onTap(item); }, {passive:false});
+  items.push(item);
+}
+
+function loop(ts){
+  if(!running) return;
+  const dt=Math.min((ts-lastTs)/1000,0.05); lastTs=ts;
+  const W=arena.clientWidth,H=arena.clientHeight, t0=ts/1000;
+
+  if(plane){
+    plane.x += plane.speed*dt; if(plane.x>W+70) plane.x=-70;
+    plane.y = plane.baseY + Math.sin(t0*1.4)*6;
+    plane.el.style.transform='translate('+plane.x+'px,'+plane.y+'px)';
+  }
+
+  for(let i=items.length-1;i>=0;i--){
+    const b=items[i]; if(!b.alive) continue;
+    const t=(ts-b.born)/1000;
+    b.vy=Math.min(b.vy+CONFIG.GRAVITY*dt, CONFIG.FALL_SPEED_MAX);
+    b.y+=b.vy*dt;
+    b.x=b.baseX+Math.sin(t*b.freq+b.phase)*b.driftAmp;
+    if(b.y>H+b.hh*2){                        // 바닥 통과
+      if(b.kind==='bug') puff(b.x, H*0.9);   // 버그만 놓침 표시(코드는 흘려보내는 게 정답)
+      b.el.remove(); items.splice(i,1); continue;
+    }
+    const deg = b.kind==='bug' ? t*b.spin : b.tilt;
+    b.el.style.transform='translate('+(b.x-b.hw)+'px,'+(b.y-b.hh)+'px) rotate('+deg+'deg)';
+  }
+  rafId=requestAnimationFrame(loop);
+}
+
+function onTap(b){
+  if(!running||!b.alive) return;
+  b.alive=false;
+  const idx=items.indexOf(b); if(idx>=0) items.splice(idx,1);
+  if(b.kind==='bug'){
+    score++; scoreVal.textContent=score; bumpScore(false);
+    streak(b.x, b.y);                                  // 위로 낚아채는 궤적
+    popEffect(b.x,b.y,'catch');
+    b.el.classList.add('grab');
+    // 위로 확 빨려 올라가며 늘어남(낚아챔)
+    b.el.style.transition='transform .17s cubic-bezier(.5,0,.9,.35), opacity .17s';
+    b.el.style.transform='translate('+(b.x-b.hw)+'px,-120px) rotate(14deg) scaleY(1.5) scaleX(.7)';
+    setTimeout(()=>b.el.remove(),180);
+  } else {
+    score=Math.max(0, score-CONFIG.CODE_PENALTY); scoreVal.textContent=score; bumpScore(true);
+    popEffect(b.x,b.y,'wrong');
+    b.el.classList.add('wrong');
+    b.el.style.transform='translate('+(b.x-b.hw)+'px,'+(b.y-b.hh)+'px) rotate('+b.tilt+'deg) scale(.4)';
+    setTimeout(()=>b.el.remove(),210);
+  }
+}
+function bumpScore(wrong){
+  const cell=scoreVal.closest('.cell');
+  scoreVal.classList.remove('bump'); void scoreVal.offsetWidth; scoreVal.classList.add('bump');
+  if(wrong && cell){ cell.classList.remove('shake'); void cell.offsetWidth; cell.classList.add('shake'); }
+}
+
+function popEffect(x,y,kind){
+  const wrong = kind==='wrong';
+  const ringc = wrong ? 'var(--coral)' : 'var(--worm)';
+  const label = wrong ? '✗ 코드!' : '+1';
+  const p=document.createElement('div'); p.className='pop';
+  p.style.left=x+'px'; p.style.top=y+'px'; p.style.setProperty('--ringc',ringc);
+  let html='<div class="ring"></div><div class="plus">'+label+'</div>';
+  const cols = wrong ? ['var(--coral)','#FFD1D2'] : ['var(--amber)','var(--worm)'];
+  for(let i=0;i<7;i++){ const a=(Math.PI*2*i/7)+rand(-.35,.35), d=rand(30,48);
+    const dx=(Math.cos(a)*d).toFixed(0), dy=(Math.sin(a)*d).toFixed(0), c=cols[i%2];
+    html+='<div class="dot" style="--dx:'+dx+'px;--dy:'+dy+'px;background:'+c+'"></div>'; }
+  p.innerHTML=html; arena.appendChild(p); setTimeout(()=>p.remove(),720);
+}
+function puff(x,y){ const d=document.createElement('div'); d.className='puff'; d.style.left=x+'px'; d.style.top=y+'px'; arena.appendChild(d); setTimeout(()=>d.remove(),520); }
+function streak(x,y){
+  const s=document.createElement('div'); s.className='streak';
+  s.style.left=x+'px'; s.style.top=(y-150)+'px'; s.style.height='160px';
+  arena.appendChild(s); setTimeout(()=>s.remove(),240);
+}
+
+function endGame(){
+  running=false; clearInterval(gameTimer); clearTimeout(bugTimer); clearTimeout(codeTimer); cancelAnimationFrame(rafId);
+  items.forEach(b=>b.el.remove()); items=[];
+  if(currentLead){ currentLead.caught=score; persist(); }
+  showResult(score);
+}
+function showResult(caught){
+  const emoji=document.getElementById('resEmoji'),title=document.getElementById('resTitle'),
+        sub=document.getElementById('resSub'),prize=document.getElementById('prizeBox'),
+        jnum=document.getElementById('jellyNum'),pmsg=document.getElementById('prizeMsg');
+  if(caught>0){
+    emoji.textContent='🎉'; title.textContent='잘 잡았어요!'; title.className='win-title';
+    sub.textContent='버그 '+caught+'마리 명중!'; prize.style.display=''; jnum.textContent=caught;
+    pmsg.textContent='이 화면을 부스 담당자에게 보여주고 지렁이 젤리 '+caught+'개를 받아가세요.';
+  } else {
+    emoji.textContent='🐛💨'; title.textContent='한 마리도 못 잡았어요!'; title.className='';
+    sub.textContent='버그들이 다 도망갔네요. 다시 도전해보세요!'; prize.style.display='none';
+  }
+  show('result');
+}
+document.getElementById('resAgain').addEventListener('click', ()=>show('intro'));
+
+/* ---------- 관리자 ---------- */
+const adminDot=document.getElementById('adminDot'),adminPanel=document.getElementById('adminPanel');
+let pressTO=null;
+adminDot.addEventListener('pointerdown', ()=>{ pressTO=setTimeout(openAdmin,1500); });
+adminDot.addEventListener('pointerup', ()=>clearTimeout(pressTO));
+adminDot.addEventListener('pointerleave', ()=>clearTimeout(pressTO));
+function openAdmin(){ document.getElementById('adminCount').textContent=leads.length; adminPanel.classList.add('active'); }
+document.getElementById('closeAdmin').addEventListener('click', ()=>adminPanel.classList.remove('active'));
+document.getElementById('resetData').addEventListener('click', ()=>{
+  let ok=true; try{ ok=confirm('수집된 리드 '+leads.length+'건을 모두 삭제할까요? 되돌릴 수 없습니다.'); }catch(e){ ok=true; }
+  if(ok){ leads=[]; persist(); document.getElementById('adminCount').textContent=0; }
+});
+document.getElementById('exportCsv').addEventListener('click', exportCsv);
+function csvCell(v){ v=(v==null?'':String(v)); return '"'+v.replace(/"/g,'""')+'"'; }
+function exportCsv(){
+  if(!leads.length){ try{ alert('아직 수집된 리드가 없습니다.'); }catch(e){} return; }
+  const header=['수집시각','이름','회사명','부서/팀','이메일','핸드폰번호','관심제품','뉴스레터구독','잡은수(젤리)'];
+  const rows=leads.map(l=>[l.ts,l.name,l.company,l.dept,l.email,l.phone,l.product,l.subscribe,l.caught].map(csvCell).join(','));
+  const csv='\uFEFF'+header.map(csvCell).join(',')+'\r\n'+rows.join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob), a=document.createElement('a');
+  const stamp=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  a.href=url; a.download='bughunt-leads-'+stamp+'.csv';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+</script>
+</body>
+</html>
