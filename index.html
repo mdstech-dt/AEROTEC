@@ -88,6 +88,9 @@
     background:var(--cream);border:2px solid var(--edge);border-radius:0;padding:16px;outline:none;transition:box-shadow .12s;
     box-shadow:inset 2px 2px 0 var(--cream-sh);}
   input::placeholder{color:rgba(22,32,63,.4)} input:focus{box-shadow:inset 0 0 0 2px var(--coral)}
+  input.invalid{box-shadow:inset 0 0 0 2px var(--coral)}
+  .ferr{display:none;margin-top:6px;font-size:13px;font-weight:700;color:var(--coral)}
+  .ferr.show{display:block}
   .chips{display:flex;flex-wrap:wrap;gap:10px}
   .chip{font-size:16px;font-weight:700;color:var(--ink);background:rgba(255,255,255,.06);
     border:2px solid var(--line);border-radius:0;padding:12px 16px;cursor:pointer;transition:.1s;}
@@ -247,9 +250,11 @@
       <div class="field"><label for="fDept">부서/팀<span class="req">*</span></label>
         <input id="fDept" type="text" autocomplete="organization-title" placeholder="예) 개발팀, SW연구소" /></div>
       <div class="field"><label for="fEmail">이메일<span class="req">*</span></label>
-        <input id="fEmail" type="email" autocomplete="email" inputmode="email" placeholder="name@company.com" /></div>
+        <input id="fEmail" type="email" autocomplete="email" inputmode="email" placeholder="회사 이메일을 입력해 주세요" />
+        <div class="ferr" id="emailErr">이메일 형식이 올바르지 않아요.</div></div>
       <div class="field"><label for="fPhone">핸드폰번호<span class="req">*</span></label>
-        <input id="fPhone" type="text" autocomplete="tel" inputmode="tel" placeholder="010-1234-5678" /></div>
+        <input id="fPhone" type="text" autocomplete="tel" inputmode="numeric" maxlength="13" placeholder="010-1234-5678" />
+        <div class="ferr" id="phoneErr">휴대폰 번호를 정확히 입력해주세요.</div></div>
       <div class="field"><label>관심 제품<span class="req">*</span> <span class="linkhint">(중복 선택 가능)</span></label>
         <div class="chips" id="products">
           <button type="button" class="chip" data-v="TRACE32">TRACE32</button>
@@ -298,7 +303,7 @@
       <h2>지렁이 젤리 획득!</h2>
       <p id="prizeMsg">이 화면을 부스 담당자에게 보여주고 젤리를 받아가세요.</p>
     </div>
-    <div style="margin-top:24px"><button class="btn" id="resAgain">다시 하기</button></div>
+    <div class="gcaption" style="margin-top:22px">잠시 후 처음 화면으로 돌아갑니다…</div>
   </section>
 
 </div>
@@ -343,20 +348,21 @@ const CONFIG = {
   TEST_MODE: false,       // 설문 켜짐: YES → 참가 정보 입력 → 게임
   GAME_SECONDS: 30,
   MAX_BUGS_TOTAL: 10,     // 잡을 수 있는 버그 총량 = 최대 젤리 수 (코드 디코이는 별도)
-  SPAWN_MS: 620,          // 등장 간격(ms). 짧을수록 와르르 쏟아짐
-  SPAWN_JITTER: 380,
-  MAX_SIMULTANEOUS: 5,    // 동시에 떨어지는 최대 개수(버그+코드). 클수록 정신없음
-  BUG_RATIO: 0.45,        // 떨어지는 것 중 버그 비율(나머지는 코드 디코이)
+  RESULT_AUTORESET_MS: 9000, // 결과 화면에서 이 시간 뒤 자동으로 첫 화면 복귀(다시하기 없음)
+  SPAWN_MS: 430,          // 등장 간격(ms). 짧을수록 와르르 쏟아짐
+  SPAWN_JITTER: 260,
+  MAX_SIMULTANEOUS: 8,    // 동시에 떨어지는 최대 개수(버그+코드). 클수록 정신없음
+  BUG_RATIO: 0.45,        // (참고용) 버그는 30초에 걸쳐 고르게 등장
   CODE_PENALTY: 1,        // 코드를 잘못 잡으면 깎이는 젤리 수
-  BUG_SIZE: 60,
-  GRAVITY: 320,           // 낙하 가속도. 클수록 빨라 어려움
-  FALL_SPEED_MAX: 380,
-  FALL_SPEED_INIT: 50,
-  DRIFT_AMP_MIN: 26,
-  DRIFT_AMP_MAX: 76,      // 좌우 흔들림. 클수록 낚아채기 어려움
-  WOBBLE_FREQ_MIN: 1.8,
-  WOBBLE_FREQ_MAX: 3.6,
-  PLANE_SPEED: 150,
+  BUG_SIZE: 48,
+  GRAVITY: 470,           // 낙하 가속도. 클수록 빨라 어려움
+  FALL_SPEED_MAX: 560,
+  FALL_SPEED_INIT: 80,
+  DRIFT_AMP_MIN: 36,
+  DRIFT_AMP_MAX: 120,     // 좌우 흔들림. 클수록 낚아채기 어려움
+  WOBBLE_FREQ_MIN: 2.4,
+  WOBBLE_FREQ_MAX: 4.8,
+  PLANE_SPEED: 180,
   BUG_COLORS: ['#E7141B'],   // 벌레는 무조건 빨강(무당벌레)
   CODE_TOKENS: ['&lt;/&gt;','{ }','0xFF','== ','NULL',';','#','[ ]','( )','♪','♫','&amp;&amp;'],
   SHEET_ENDPOINT: 'https://script.google.com/macros/s/AKfycbzjxr5QH5725VoJ0P-W26pwbGW9Mtt5bFZuIsW_OfMUy6zePM4amKQpwwaWLMR_4Rb9/exec',
@@ -456,14 +462,56 @@ const fName=document.getElementById('fName'),fCompany=document.getElementById('f
       fDept=document.getElementById('fDept'),fEmail=document.getElementById('fEmail'),
       fPhone=document.getElementById('fPhone'),fSub=document.getElementById('fSub'),
       fConsent=document.getElementById('fConsent'),startBtn=document.getElementById('startGame');
-function emailOk(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()); }
-function phoneOk(v){ return (v.replace(/[^0-9]/g,'').length)>=10; }
+const emailErr=document.getElementById('emailErr'), phoneErr=document.getElementById('phoneErr');
+function emailOk(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim()); }
+function phoneDigits(v){ return v.replace(/[^0-9]/g,''); }
+function phoneLenOk(v){ const n=phoneDigits(v).length; return n===10||n===11; }
+// 대충 친 번호(연속·반복·같은 숫자) 걸러내기
+function phoneFake(v){
+  const d=phoneDigits(v);
+  if(d.length<10) return false;
+  const body=d.slice(3);                        // 010 뒤 8자리
+  if(/^(\d)\1+$/.test(body)) return true;        // 00000000 등 전부 같은 숫자
+  if(body.length>=8 && body.slice(0,4)===body.slice(4,8)) return true; // 1234-1234 반복
+  let asc=true,desc=true;                         // 12345678 / 87654321 연속
+  for(let i=1;i<body.length;i++){ if(+body[i]!==+body[i-1]+1) asc=false; if(+body[i]!==+body[i-1]-1) desc=false; }
+  if(asc||desc) return true;
+  return false;
+}
+function phoneOk(v){ return phoneLenOk(v) && !phoneFake(v); }
+// 010-1234-5678 형태로 자동 하이픈
+function formatPhone(v){
+  const d=phoneDigits(v).slice(0,11);
+  if(d.length<4) return d;
+  if(d.length<8) return d.slice(0,3)+'-'+d.slice(3);
+  return d.slice(0,3)+'-'+d.slice(3,7)+'-'+d.slice(7);
+}
+fPhone.addEventListener('input', ()=>{ fPhone.value=formatPhone(fPhone.value); });
+// 입력 중에는 조용히, 포커스 빠질 때 오류 표시
+function markErr(el, errEl, ok){
+  const has=el.value.trim().length>0;
+  const bad = has && !ok;
+  errEl.classList.toggle('show', bad);
+  el.classList.toggle('invalid', bad);
+}
+function checkPhone(){
+  const has=fPhone.value.trim().length>0;
+  const lenOk=phoneLenOk(fPhone.value), fake=phoneFake(fPhone.value), ok=lenOk&&!fake;
+  if(has && !ok) phoneErr.textContent = fake ? '실제 사용하는 휴대폰 번호를 입력해 주세요.' : '휴대폰 번호를 정확히 입력해주세요.';
+  markErr(fPhone, phoneErr, ok);
+}
+fEmail.addEventListener('blur', ()=>markErr(fEmail,emailErr,emailOk(fEmail.value)));
+fPhone.addEventListener('blur', checkPhone);
+fEmail.addEventListener('input', ()=>{ if(emailErr.classList.contains('show')) markErr(fEmail,emailErr,emailOk(fEmail.value)); });
+fPhone.addEventListener('input', ()=>{ if(phoneErr.classList.contains('show')) checkPhone(); });
 function validate(){ const ok=fName.value.trim()&&fCompany.value.trim()&&fDept.value.trim()
   &&emailOk(fEmail.value)&&phoneOk(fPhone.value)&&products.size>0&&fConsent.checked; startBtn.disabled=!ok; return ok; }
 [fName,fCompany,fDept,fEmail,fPhone].forEach(el=>el.addEventListener('input',validate));
 fConsent.addEventListener('change',validate);
 function resetForm(){ fName.value='';fCompany.value='';fDept.value='';fEmail.value='';fPhone.value='';
   fSub.checked=false;fConsent.checked=false;
+  emailErr.classList.remove('show'); phoneErr.classList.remove('show');
+  fEmail.classList.remove('invalid'); fPhone.classList.remove('invalid');
   products.clear();productWrap.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed','false'));startBtn.disabled=true; }
 startBtn.addEventListener('click', ()=>{
   if(!validate()) return;
@@ -559,7 +607,7 @@ function spawnItem(kind){
   const item={ el, kind, baseX:dropX, x:dropX, y:dropY, hw, hh, vy:CONFIG.FALL_SPEED_INIT,
     driftAmp:rand(CONFIG.DRIFT_AMP_MIN,CONFIG.DRIFT_AMP_MAX),
     freq:rand(CONFIG.WOBBLE_FREQ_MIN,CONFIG.WOBBLE_FREQ_MAX), phase:rand(0,Math.PI*2),
-    spin:rand(30,70)*(Math.random()<0.5?-1:1), tilt:rand(-10,10),
+    spin:rand(30,70)*(Math.random()<0.5?-1:1), tilt:rand(-10,10), spd:rand(0.85,1.4),
     born:performance.now(), alive:true };
   el.addEventListener('pointerdown', ev=>{ ev.preventDefault(); onTap(item); }, {passive:false});
   items.push(item);
@@ -579,7 +627,7 @@ function loop(ts){
   for(let i=items.length-1;i>=0;i--){
     const b=items[i]; if(!b.alive) continue;
     const t=(ts-b.born)/1000;
-    b.vy=Math.min(b.vy+CONFIG.GRAVITY*dt, CONFIG.FALL_SPEED_MAX);
+    b.vy=Math.min(b.vy+CONFIG.GRAVITY*b.spd*dt, CONFIG.FALL_SPEED_MAX*b.spd);
     b.y+=b.vy*dt;
     b.x=b.baseX+Math.sin(t*b.freq+b.phase)*b.driftAmp;
     if(b.y>H+b.hh*2){                        // 바닥 통과
@@ -655,11 +703,13 @@ function showResult(caught){
     pmsg.textContent='이 화면을 부스 담당자에게 보여주고 지렁이 젤리 '+caught+'개를 받아가세요.';
   } else {
     emoji.textContent='🐛💨'; title.textContent='한 마리도 못 잡았어요!'; title.className='';
-    sub.textContent='버그들이 다 도망갔네요. 다시 도전해보세요!'; prize.style.display='none';
+    sub.textContent='버그들이 다 도망갔네요!'; prize.style.display='none';
   }
   show('result');
+  clearTimeout(resultTimer);
+  resultTimer=setTimeout(()=>{ if(screens.result.classList.contains('active')) show('intro'); }, CONFIG.RESULT_AUTORESET_MS);
 }
-document.getElementById('resAgain').addEventListener('click', ()=>show('intro'));
+let resultTimer=null;
 
 /* ---------- 관리자 ---------- */
 const adminDot=document.getElementById('adminDot'),adminPanel=document.getElementById('adminPanel');
